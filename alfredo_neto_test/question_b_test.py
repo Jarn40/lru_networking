@@ -1,5 +1,5 @@
 '''module responsable for tests'''
-import question_b
+import question_b.version_compare as question_b
 
 
 def test_int_int():

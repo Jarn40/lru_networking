@@ -16,6 +16,7 @@ def version_compare(v_1, v_2):
     return f'{v_1} is equal to {v_2}'
 
 if __name__ == "__main__":
+    '''Can be used as a standAlone module if wanted'''
     if len(sys.argv) != 3:
         print('Please call this program providing the right arguments.Example: version_compare.py version1 version2')
         exit()
