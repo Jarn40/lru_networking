@@ -1,4 +1,5 @@
 import socket
+import pickle
 from time import sleep
 HOST = socket.gethostbyname(socket.gethostname())
 HOST = '192.168.27.253'
@@ -10,6 +11,8 @@ while 1:
         s.connect((HOST, PORT))
         while 1:
             data = s.recv(1024)
+            data = {'teste': 2}
+            s.send(pickle.dumps(data))
             print('Received', repr(data))
     except ConnectionResetError as err:
         print(f"Server Desconectado")
@@ -18,3 +21,4 @@ while 1:
         sleep(1)
     except OSError as err:
         print(err)
+        break
