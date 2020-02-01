@@ -178,33 +178,36 @@ class CacheNework():
             print(f"HOST ==>{self.host}")
             self.subscribers[command['host']].send(self.host.encode())
 
-        elif command['type'] == 'syncKey':
+        elif command['type'] == 'syncSetKey':
             self.local_cache.set_key(command['data'][0], command['data'][1])
 
-        elif command['type'] == 'syncKeys':
+        elif command['type'] == 'syncSetKeys':
             for item in command['data']:
                 self.local_cache.set_key(item[0], item[1])
+
+        elif command['type'] == 'syncGetKey':
+            return self.local_cache.get_key(command['data'])
 
         #CLIENT->SERVER COMMUNICATION COMMANDS
 
         elif command['type'] == 'setKey':
             self.local_cache.set_key(command['data'][0], command['data'][1])
-            command['type'] = 'syncKey'
+            command['type'] = 'syncSetKey'
             self.sync_data(command)
 
         elif command['type'] == 'setKeys':
             for item in command['data']:
                 self.local_cache.set_key(item[0], item[1])
-            command['type'] = 'syncKeys'
+            command['type'] = 'syncSetKeys'
             self.sync_data(command)
 
         elif command['type'] == 'spyCache':
             return self.local_cache.spy()
 
         elif command['type'] == 'getKey':
-            for key in command['data']:
-                self.sync_data(command)
-                return self.local_cache.get_key(key)
+            command['type'] = 'syncGetKey'
+            self.sync_data(command)
+            return self.local_cache.get_key(command['data'])
 
     # CONTROLER
 
