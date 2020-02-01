@@ -1,46 +1,46 @@
+'''Module responsable for creating and sync a lru_cache network'''
 import socket
 import pickle
-from functools import cached_property
 import time
 import sys
 from threading import Thread
 
-# hostname = socket.gethostname()
-# Ipv4 = socket.gethostbyname(hostname)
-
-# print(f'{hostname} : {Ipv4}')
+import lru_cache
 
 FIXED_MSG_SIZE = 1024
 
 
-class CacheServerNode():
+class CacheNework():
     '''Node of a big network infraestructure'''
 
     def __init__(self, port=5000, join=None):
         self.port = port
         self.subscribers = {}
-        self.connectionThread = {}
-        self.networkNodes = []
+        self.connection_thread = {}
+        self.network_nodes = []
+        self.local_cache = lru_cache.LRUCache()
+        self.host = socket.gethostbyname(socket.gethostname())
+        self.server = self.create_server()
         if join:
-            self.joinNetwork(join)
+            self.join_network(join)
         else:
-            self.startNetwork()
+            self.start_network()
 
-    @cached_property
-    def host(self):
-        '''finds the ip address of machine'''
-        # return '192.168.27.253'
-        return socket.gethostbyname(socket.gethostname())
+    def get_host(self):
+        '''returns ip address of machine'''
+        return self.host
 
-    @cached_property
-    def server(self):
-        return socket.create_server((self.host, self.port))
+    def create_server(self):
+        '''Method for more compatibility instead of using socket.create_server from 3.8+'''
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as serv:
+            return serv.bind((self.host, self.port))
 
-    def serverNode(self):
+    def local_node(self):
         '''create a local node for listen start point of new nodes'''
         while 1:
             self.server.listen(1)
-            conn, addr = self.server.accept()
+            conn, _ = self.server.accept()
+            ##This part is to allow tunnel networking, avoiding moden's IP
             command = {
                 'type': 'getHost',
                 'host': self.host
@@ -48,23 +48,24 @@ class CacheServerNode():
             conn.send(pickle.dumps(command))
             actual_host = conn.recv(FIXED_MSG_SIZE)
             actual_host = actual_host.decode()
-
+            ##-----------------------------------------------------
             self.subscribers[actual_host] = conn
-            self.networkNodes.append(actual_host)
+            self.network_nodes.append(actual_host)
             command = {
                 'type': 'updateNodeList',
-                'data': self.networkNodes,
+                'data': self.network_nodes,
                 'host': self.host
             }
 
-            self.syncData(command)
+            self.sync_data(command)
             print(f"New server Conected: {actual_host}")
-            self.connectionThread[actual_host] = Thread(target=self.listenConectedServer, name=actual_host, args=[actual_host, self.subscribers[actual_host]])
-            self.connectionThread[actual_host].setDaemon(True)
-            self.connectionThread[actual_host].start()
-            print(self.networkNodes)
+            self.connection_thread[actual_host] = Thread(target=self.listen_local_node, name=actual_host, args=[actual_host, self.subscribers[actual_host]])
+            self.connection_thread[actual_host].setDaemon(True)
+            self.connection_thread[actual_host].start()
+            print(self.network_nodes)
 
-    def listenConectedServer(self, addr, conn):
+    def listen_local_node(self, addr, conn):
+        '''Method responsable for listen connection remote -> local'''
         while 1:
             try:
                 data = []
@@ -86,14 +87,14 @@ class CacheServerNode():
                 print(err)
                 break
 
-    def contactingNode(self, HOST, PORT=5000):
+    def connect_remote_node(self, host, port=5000):
         '''stay in contact with each existing node in network'''
         while 1:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect((HOST, PORT))
-                self.subscribers[HOST] = sock
-                print(f"Add by contacting +{HOST}")
+                sock.connect((host, port))
+                self.subscribers[host] = sock
+                print(f"Add by contacting +{host}")
                 while 1:
                     data = []
                     while 1:
@@ -106,30 +107,32 @@ class CacheServerNode():
                     command = pickle.loads(b"".join(data))
                     # This part is to update LRU
                     self.command_dispatcher(command)
-                    print(f'Command Received from {HOST}:\n{command}')
+                    print(f'Command Received from {host}:\n{command}')
 
             except ConnectionResetError as err:
-                print(f"{HOST} => Disconnected!")
+                print(f"{host} => Disconnected!")
             except ConnectionRefusedError as err:
-                print(f"Trying reconnection to {HOST}!")
+                print(f"Trying reconnection to {host}!")
                 time.sleep(5)
             except OSError as err:
                 print(f'[ERROR] {err}')
                 break
 
-    def connectToNetwork(self):
+    def connect_to_network(self):
         '''method that creates all connection threads'''
-        for link in self.networkNodes:
+        for link in self.network_nodes:
             print(link)
-            if link not in self.subscribers.keys() and link is not self.host and link not in self.connectionThread.keys():
+            if link not in self.subscribers.keys() and link is not self.host and link not in self.connection_thread.keys():
                 print("CRIANDO THREAD")
-                self.connectionThread[link] = Thread(target=self.contactingNode, name=link, args=[link, 5000])
-                self.connectionThread[link].setDaemon(True)
-                self.connectionThread[link].start()
+                self.connection_thread[link] = Thread(target=self.connect_remote_node, name=link, args=[link, 5000])
+                self.connection_thread[link].setDaemon(True)
+                self.connection_thread[link].start()
                 print(f"{link} Conected")
 
-    def syncData(self, data={}):
-        '''Method to syncronize data across all nodes'''
+    def sync_data(self, data):
+        '''Method to syncronize data across all nodes
+        :data: {'type: ?', 'data: [(key,value),...]'}
+        '''
         remove = []
         for conn in self.subscribers:
             try:
@@ -147,77 +150,69 @@ class CacheServerNode():
     # Commands
 
     def command_dispatcher(self, command):
-
-        if type(command) is not dict or 'type' not in command.keys():
+        '''Method responsable for handle commands for network'''
+        if not isinstance(command, dict) or 'type' not in command.keys():
             print("Impossible to complete command")
             return
 
         if command['type'] == 'updateNodeList':
             print('updating node')
             for ipv4 in command['data']:
-                if ipv4 not in self.networkNodes and ipv4 != self.host:
+                if ipv4 not in self.network_nodes and ipv4 != self.host:
                     print(f"Adding by update + {ipv4}")
-                    self.networkNodes.append(ipv4)
-            self.connectToNetwork()
+                    self.network_nodes.append(ipv4)
+            self.connect_to_network()
 
         elif command['type'] == 'getHost':
             print(f"HOST ==>{self.host}")
             self.subscribers[command['host']].send(self.host.encode())
 
         elif command['type'] == 'setKey':
-            for key in command['data']:
-                # TODO write on LRU
-                self.syncData(command)
-                pass
-        elif command['type'] == 'getCache':
-            # TODO get from LRU
-            self.syncData(command)
+            self.local_cache.set_key(command['data'][0], command['data'][1])
+            self.sync_data(command)
+
+        elif command['type'] == 'setKeys':
+            for item in command['data']:
+                self.local_cache.set_key(item[0], item[1])
+                self.sync_data(command)
+        elif command['type'] == 'spyCache':
+            return self.local_cache.spy()
+
         elif command['type'] == 'getKey':
             for key in command['data']:
-                # TODO get specific key from LRU
-                self.syncData(command)
+                self.local_cache.get_key(key)
+                self.sync_data(command)
 
     # CONTROLER
 
-    def startNetwork(self):
+    def start_network(self):
         '''Start a new network'''
-        self.serverNodeThread = Thread(target=self.serverNode, name="Server Network Listener")
-        self.serverNodeThread.setDaemon(True)
-        self.serverNodeThread.start()
+        self.server_node_thread = Thread(target=self.local_node, name="Local Cache Node")
+        self.server_node_thread.setDaemon(True)
+        self.server_node_thread.start()
         print("Network Started!")
 
-    def joinNetwork(self, nodeIP):
+    def join_network(self, node_ip):
         '''Connect to an existing network'''
-        print(f"Joining Network of Node {nodeIP}")
-        self.networkNodes.append(nodeIP)
-        self.connectToNetwork()
-        self.startNetwork()
+        print(f"Joining Network of Node {node_ip}")
+        self.network_nodes.append(node_ip)
+        self.connect_to_network()
+        self.start_network()
 
     def stop(self):
         '''stop all sockets and threads'''
-        [conn.close() for conn in self.subscribers.values()]
+        _ = [conn.close() for conn in self.subscribers.values()]
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        node = CacheServerNode(join=sys.argv[1])
+        NODE = CacheNework(join=sys.argv[1])
     else:
-        node = CacheServerNode()
+        NODE = CacheNework()
     while 1:
         try:
             pass
         except KeyboardInterrupt:
-            node.stop()
+            NODE.stop()
             print("Exiting Network")
             break
-
-    # print("OK1")
-    # timer = time.time()
-    # while 1:
-    #     if time.time() - timer > 5:
-    #         print("OK")
-    #         node.sendData()
-    #         timer = time.time()
-
-    # import cache_server_node as csn
-    # node = csn.CacheServerNode(join='192.168.27.254')
