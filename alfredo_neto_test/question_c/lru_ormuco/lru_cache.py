@@ -124,7 +124,7 @@ class LRUCache():
             node.next = None
             self.head.next = node
             self.head = node
-        node.updateTimer()
+        node.update_timer()
         self.current_size += 1
 
 

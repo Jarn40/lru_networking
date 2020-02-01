@@ -8,6 +8,7 @@ from threading import Thread
 import lru_cache
 
 FIXED_MSG_SIZE = 1024
+CON_RETRY = 5
 
 
 class CacheNework():
@@ -66,6 +67,7 @@ class CacheNework():
                 data = []
                 while 1:
                     packet = conn.recv(FIXED_MSG_SIZE)
+                    retry = 0
                     data.append(packet)
                     if int(sys.getsizeof(packet)) < FIXED_MSG_SIZE:
                         break
@@ -77,7 +79,11 @@ class CacheNework():
                 print(f'Command Received from {addr}:\n{command}')
 
             except ConnectionResetError as err:
+                if retry == CON_RETRY:
+                    break
                 print(f"{addr} => Disconnected!")
+                retry += 1
+                time.sleep(5)
             except OSError as err:
                 print(err)
                 break
@@ -91,6 +97,7 @@ class CacheNework():
                 self.subscribers[host] = sock
                 print(f"Add by contacting +{host}")
                 while 1:
+                    retry = 0
                     data = []
                     while 1:
                         packet = sock.recv(FIXED_MSG_SIZE)
@@ -105,9 +112,16 @@ class CacheNework():
                     print(f'Command Received from {host}:\n{command}')
 
             except ConnectionResetError as err:
+                if retry == CON_RETRY:
+                    break
                 print(f"{host} => Disconnected!")
+                retry += 1
+                time.sleep(5)
             except ConnectionRefusedError as err:
+                if retry == CON_RETRY:
+                    break
                 print(f"Trying reconnection to {host}!")
+                retry += 1
                 time.sleep(5)
             except OSError as err:
                 print(f'[ERROR] {err}')
