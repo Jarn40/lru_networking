@@ -51,7 +51,6 @@ class LRUCache():
             tail = self.end
             if time.time() - tail.time_alocated >= self.time_limit:
                 print(f"TAIL {tail} => Expired")
-                print(f'Next:{tail.next} | Prev:{tail.prev}')
                 del self.cache_map[tail.key]
                 next_tail = tail.next
                 self._remove(tail)
