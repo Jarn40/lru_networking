@@ -165,7 +165,7 @@ class CacheNework():
             return
 
         #SERVER->SERVER COMMUNICATION COMMANDS
-        
+
         if command['type'] == 'updateNodeList':
             print('updating node')
             for ipv4 in command['data']:
@@ -181,33 +181,26 @@ class CacheNework():
         elif command['type'] == 'syncSetKey':
             self.local_cache.set_key(command['data'][0], command['data'][1])
 
-        elif command['type'] == 'syncSetKeys':
-            for item in command['data']:
-                self.local_cache.set_key(item[0], item[1])
-
         elif command['type'] == 'syncGetKey':
             return self.local_cache.get_key(command['data'])
 
-        #CLIENT->SERVER COMMUNICATION COMMANDS
+    #CLIENT->SERVER COMMUNICATION COMMANDS
 
-        elif command['type'] == 'setKey':
-            self.local_cache.set_key(command['data'][0], command['data'][1])
-            command['type'] = 'syncSetKey'
-            self.sync_data(command)
+    def set_key(self, key, value):
+        '''method for client write to lru'''
+        self.local_cache.set_key(key, value)
+        command = {'type':'syncSetKey', 'data':(key, value)}
+        self.sync_data(command)
 
-        elif command['type'] == 'setKeys':
-            for item in command['data']:
-                self.local_cache.set_key(item[0], item[1])
-            command['type'] = 'syncSetKeys'
-            self.sync_data(command)
+    def spy(self):
+        '''method for client spy on lru without touch it'''
+        return self.local_cache.spy()
 
-        elif command['type'] == 'spyCache':
-            return self.local_cache.spy()
-
-        elif command['type'] == 'getKey':
-            command['type'] = 'syncGetKey'
-            self.sync_data(command)
-            return self.local_cache.get_key(command['data'])
+    def get_key(self, key):
+        '''method for client read from lru'''
+        command = {'type':'syncGetKey', 'data':key}
+        self.sync_data(command)
+        return self.local_cache.get_key(command['data'])
 
     # CONTROLER
 
