@@ -164,6 +164,8 @@ class CacheNework():
             print("Impossible to complete command")
             return
 
+        #SERVER->SERVER COMMUNICATION COMMANDS
+        
         if command['type'] == 'updateNodeList':
             print('updating node')
             for ipv4 in command['data']:
@@ -183,6 +185,8 @@ class CacheNework():
             for item in command['data']:
                 self.local_cache.set_key(item[0], item[1])
 
+        #CLIENT->SERVER COMMUNICATION COMMANDS
+
         elif command['type'] == 'setKey':
             self.local_cache.set_key(command['data'][0], command['data'][1])
             command['type'] = 'syncKey'
@@ -199,8 +203,8 @@ class CacheNework():
 
         elif command['type'] == 'getKey':
             for key in command['data']:
-                self.local_cache.get_key(key)
                 self.sync_data(command)
+                return self.local_cache.get_key(key)
 
     # CONTROLER
 
