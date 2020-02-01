@@ -20,7 +20,7 @@ class CacheNework():
         self.network_nodes = []
         self.local_cache = lru_cache.LRUCache()
         self.host = socket.gethostbyname(socket.gethostname())
-        self.server = self.create_server()
+        self.server = socket.create_server((self.host, self.port))
         if join:
             self.join_network(join)
         else:
@@ -29,11 +29,6 @@ class CacheNework():
     def get_host(self):
         '''returns ip address of machine'''
         return self.host
-
-    def create_server(self):
-        '''Method for more compatibility instead of using socket.create_server from 3.8+'''
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as serv:
-            return serv.bind((self.host, self.port))
 
     def local_node(self):
         '''create a local node for listen start point of new nodes'''
@@ -58,7 +53,7 @@ class CacheNework():
             }
 
             self.sync_data(command)
-            print(f"New server Conected: {actual_host}")
+            print(f'New server Conected: {actual_host}')
             self.connection_thread[actual_host] = Thread(target=self.listen_local_node, name=actual_host, args=[actual_host, self.subscribers[actual_host]])
             self.connection_thread[actual_host].setDaemon(True)
             self.connection_thread[actual_host].start()
