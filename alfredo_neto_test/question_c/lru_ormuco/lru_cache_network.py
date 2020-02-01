@@ -176,14 +176,24 @@ class CacheNework():
             print(f"HOST ==>{self.host}")
             self.subscribers[command['host']].send(self.host.encode())
 
+        elif command['type'] == 'syncKey':
+            self.local_cache.set_key(command['data'][0], command['data'][1])
+
+        elif command['type'] == 'syncKeys':
+            for item in command['data']:
+                self.local_cache.set_key(item[0], item[1])
+
         elif command['type'] == 'setKey':
             self.local_cache.set_key(command['data'][0], command['data'][1])
+            command['type'] = 'syncKey'
             self.sync_data(command)
 
         elif command['type'] == 'setKeys':
             for item in command['data']:
                 self.local_cache.set_key(item[0], item[1])
-                self.sync_data(command)
+            command['type'] = 'syncKeys'
+            self.sync_data(command)
+
         elif command['type'] == 'spyCache':
             return self.local_cache.spy()
 
