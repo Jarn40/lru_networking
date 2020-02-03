@@ -1,5 +1,5 @@
 '''lru module created by hand with timeout'''
-import json
+# import json
 import time
 from threading import Thread
 
@@ -17,12 +17,12 @@ class LRUNode():
         self.time_alocated = time.time()
 
     def manual_timer(self, expire):
+        '''method for sync purpose'''
         self.time_alocated = float(expire)
 
     def __str__(self):
         '''built-in method for printing value if object is printed'''
         return f'{self.key}, {self.value}, {self.time_alocated}'
-        # return "(%s, %s)" % (self.key, self.value)
 
 class LRUCache():
     '''LRU class for caching'''
