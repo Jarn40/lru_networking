@@ -1,10 +1,10 @@
-'''Module responsable for creating and sync a lru_cache network'''
+'''Module responsable for creating and sync a local_lru_cache network'''
 import socket
 import pickle
 import time
 import sys
 from threading import Thread
-import lru_cache
+import local_lru_cache
 
 FIXED_MSG_SIZE = 1024
 CON_RETRY = 5
@@ -25,7 +25,7 @@ class CacheNetwork():
         self.subscribers = {}
         self.connection_thread = {}
         self.network_nodes = []
-        self.local_cache = lru_cache.LRUCache(max_size, expire_after)
+        self.local_cache = local_lru_cache.LRUCache(max_size, expire_after)
         self.host = socket.gethostbyname(socket.gethostname())
         self.server = socket.create_server((self.host, self.port))
         if join:
