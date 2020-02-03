@@ -4,22 +4,28 @@ import pickle
 import time
 import sys
 from threading import Thread
-
 import lru_cache
 
 FIXED_MSG_SIZE = 1024
 CON_RETRY = 5
 
 
-class CacheNework():
-    '''Node of a big network infraestructure'''
+class CacheNetwork():
+    '''Node of a big network infraestructure
+        Public Methods:
+            get_key(key) -> get key on cache
+            set_key(key,value) -> save key,value on cache
+            spy() -> get entire cache without touching it
+        Public Decorator
+            cache_io -> cache I/O of a function/method
+    '''
 
-    def __init__(self, port=5000, join=None):
+    def __init__(self, port=5000, join=None, max_size=1000, expire_after=60):
         self.port = port
         self.subscribers = {}
         self.connection_thread = {}
         self.network_nodes = []
-        self.local_cache = lru_cache.LRUCache()
+        self.local_cache = lru_cache.LRUCache(max_size, expire_after)
         self.host = socket.gethostbyname(socket.gethostname())
         self.server = socket.create_server((self.host, self.port))
         if join:
@@ -48,8 +54,9 @@ class CacheNework():
             self.subscribers[actual_host] = conn
             self.network_nodes.append(actual_host)
             command = {
-                'type': 'updateNodeList',
-                'data': self.network_nodes,
+                'type': 'updateNode',
+                'nodes': self.network_nodes,
+                'data': self.spy(),
                 'host': self.host
             }
 
@@ -166,12 +173,15 @@ class CacheNework():
 
         #SERVER->SERVER COMMUNICATION COMMANDS
 
-        if command['type'] == 'updateNodeList':
-            print('updating node')
-            for ipv4 in command['data']:
+        if command['type'] == 'updateNode':
+            for ipv4 in command['nodes']:
                 if ipv4 not in self.network_nodes and ipv4 != self.host:
                     print(f"Adding by update + {ipv4}")
                     self.network_nodes.append(ipv4)
+
+            for key in command['data'].keys()[::-1]:
+                self.local_cache.sync_key(command['data'][key])
+
             self.connect_to_network()
 
         elif command['type'] == 'getHost':
@@ -200,7 +210,7 @@ class CacheNework():
         '''method for client read from lru'''
         command = {'type':'syncGetKey', 'data':key}
         self.sync_data(command)
-        return self.local_cache.get_key(command['data'])
+        return self.local_cache.get_key(key)
 
     # CONTROLER
 
@@ -222,12 +232,29 @@ class CacheNework():
         '''stop all sockets and threads'''
         _ = [conn.close() for conn in self.subscribers.values()]
 
+    def cache_io(self, func):
+        ''' Decorator for saving input and output from custom functions/methods to lru
+            usage:
+            @cache_io
+            function_for_caching
+        '''
+        def io_to_lru(*args, **kwargs):
+            key = f'{func.__name__},{args},{kwargs}'
+            lru = self.get_key(key)
+            if lru == -1:
+                result = func(*args, **kwargs)
+                self.set_key(key, result)
+            else:
+                return lru
+            return result
+        return io_to_lru
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        NODE = CacheNework(join=sys.argv[1])
+        NODE = CacheNetwork(join=sys.argv[1])
     else:
-        NODE = CacheNework()
+        NODE = CacheNetwork()
     while 1:
         try:
             pass

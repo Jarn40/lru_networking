@@ -2,6 +2,7 @@
 import json
 import time
 from threading import Thread
+
 class LRUNode():
     '''actual lru node for linked list creation'''
     def __init__(self, key, value):
@@ -9,19 +10,23 @@ class LRUNode():
         self.value = value
         self.prev = None
         self.next = None
-        self.update_timer()
+        self.time_alocated = None
 
     def update_timer(self):
         '''method responsable for updating node expiration time'''
         self.time_alocated = time.time()
 
+    def manual_timer(self, expire):
+        self.time_alocated = float(expire)
+
     def __str__(self):
         '''built-in method for printing value if object is printed'''
-        return "(%s, %s)" % (self.key, self.value)
+        return f'{self.key}, {self.value}, {self.time_alocated}'
+        # return "(%s, %s)" % (self.key, self.value)
 
 class LRUCache():
     '''LRU class for caching'''
-    def __init__(self, max_size=10, expire_after=60):
+    def __init__(self, max_size=1000, expire_after=60):
         """
         LRU Cache with default size of 10 and tail expire time of 1 min.
         """
@@ -56,8 +61,6 @@ class LRUCache():
                 self._remove(tail)
                 self.end = next_tail
 
-
-
     def spy(self):
         '''Method to see entire LRU cache without touching it'''
         current = self.head
@@ -66,15 +69,26 @@ class LRUCache():
 
         while current:
             if ref_pos == 0:
-                lru_map['[head]'] = f'{current}'
+                lru_map['[head]'] = {
+                    'key':current.key,
+                    'value': current.value,
+                    'expire': current.time_alocated
+                }
             elif ref_pos == self.current_size -1:
-                lru_map['[tail]'] = f'{current}'
+                lru_map['[tail]'] = {
+                    'key':current.key,
+                    'value': current.value,
+                    'expire': current.time_alocated
+                }
             else:
-                lru_map[f'[node-{ref_pos}]'] = f'{current}'
+                lru_map[f'[node-{ref_pos}]'] = {
+                    'key':current.key,
+                    'value': current.value,
+                    'expire': current.time_alocated
+                }
             ref_pos += 1
             current = current.prev
-        lru_map['[null]'] = 'null'
-        print(json.dumps(lru_map, indent=4, separators=("  ↓", " -> ")))
+        # print(json.dumps(lru_map, indent=4, separators=("  ↓", " -> ")))
         return lru_map
 
 
@@ -82,7 +96,7 @@ class LRUCache():
         """
         Method for get and update LRU key
         """
-        if key not in self.cache_map:
+        if key not in self.cache_map.keys():
             return -1
 
         node = self.cache_map[key]
@@ -97,7 +111,7 @@ class LRUCache():
         """
         Method for write or update a LRU key
         """
-        if key in self.cache_map:
+        if key in self.cache_map.keys():
             node = self.cache_map[key]
             node.value = value
 
@@ -113,7 +127,7 @@ class LRUCache():
             self.cache_map[key] = new_node
 
 
-    def _set_head(self, node):
+    def _set_head(self, node, sync=False):
         '''Private methode for setting the head of LRU'''
         if not self.head:
             self.head = node
@@ -123,7 +137,8 @@ class LRUCache():
             node.next = None
             self.head.next = node
             self.head = node
-        node.update_timer()
+        if not sync:
+            node.update_timer()
         self.current_size += 1
 
 
@@ -146,3 +161,12 @@ class LRUCache():
             self.end.prev = None
         self.current_size -= 1
         return node
+
+    def sync_key(self, node):
+        """
+        Method for sync LRU key
+        """
+        new_node = LRUNode(node.key, node.value)
+        new_node.manual_timer(node.expire)
+        self._set_head(new_node, True)
+        self.cache_map[node.key] = new_node
