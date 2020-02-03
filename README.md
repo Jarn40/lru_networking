@@ -60,6 +60,8 @@ Tests requested for position.
    
    I opted for creating a interconected cache network, only using basic and built-in packages.
    
+   Note that if you wanna try this code, either you will need to run as a program (this method is good for creating server, for safe heaven) or install the package and import it, if you import the file directly it will raise an import error. Please follow the 'usage as module' down bellow.
+   
    Usage connection method:
     
       To start a network, only need to run as a program, or if you like import and run without any imputs.
