@@ -5,12 +5,15 @@ Tests requested for position.
 - Question A
 
     A program that checks if there is intersection between 2 lines.
-    This one cant be used as a module
+
     Usage:
     
       python program.py x1 x2 x3 x4
       
-      
+    Module Usage:
+      import question_a.program as program
+      program.has_intersection(x1, x2, x3, x4)
+
 - Question B
 
     A program/module that compare 2 version values, and return a string with the relationship between them.

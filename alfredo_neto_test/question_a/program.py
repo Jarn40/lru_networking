@@ -4,13 +4,20 @@ from __future__ import print_function
 import sys
 
 
+def has_intersection(x1, x2, x3 ,x4):
+    '''function that checks if 2 lines intesects
+    :rbool'''
+    line_1 = set(range(min(x1, x2), max(x1, x2)+1))
+    line_2 = set(range(min(x3, x4), max(x3, x4)+1))
+    # print(line_1)
+    return bool(line_1.intersection(line_2))
+
+
+
 if __name__ == "__main__":
 
     if len(sys.argv) != 5:
         print('Please call this program providing the right arguments.Example: program.py x1 x2 x3 x4')
-        exit()
+        sys.exit()
 
-    LINE_1 = set(range(int(sys.argv[1]), int(sys.argv[2])+1))
-    LINE_2 = set(range(int(sys.argv[3]), int(sys.argv[4])+1))
-
-    print(bool(LINE_1.intersection(LINE_2)))
+    print(has_intersection(int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])))
