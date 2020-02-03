@@ -166,7 +166,7 @@ class LRUCache():
         """
         Method for sync LRU key
         """
-        new_node = LRUNode(node.key, node.value)
-        new_node.manual_timer(node.expire)
+        new_node = LRUNode(node['key'], node['value'])
+        new_node.manual_timer(node['expire'])
         self._set_head(new_node, True)
-        self.cache_map[node.key] = new_node
+        self.cache_map[node['key']] = new_node

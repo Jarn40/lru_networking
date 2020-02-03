@@ -4,7 +4,10 @@ import pickle
 import time
 import sys
 from threading import Thread
-import lru_ormuco.local_lru_cache as local_lru_cache
+if __name__ == "__main__":
+    import local_lru_cache
+else:
+    import lru_ormuco.local_lru_cache as local_lru_cache
 
 FIXED_MSG_SIZE = 1024
 CON_RETRY = 5
@@ -24,7 +27,9 @@ class CacheNetwork():
         self.port = port
         self.subscribers = {}
         self.connection_thread = {}
+        self.reconnect_list = []
         self.network_nodes = []
+        self.updated = False
         self.max_size = max_size
         self.expire_after = expire_after
         if not join:
@@ -55,7 +60,8 @@ class CacheNetwork():
             actual_host = actual_host.decode()
             ##-----------------------------------------------------
             self.subscribers[actual_host] = conn
-            self.network_nodes.append(actual_host)
+            if actual_host not in self.network_nodes:
+                self.network_nodes.append(actual_host)
             command = {
                 'type': 'updateNode',
                 'nodes': self.network_nodes,
@@ -65,7 +71,7 @@ class CacheNetwork():
                 'expire_after': self.expire_after
             }
 
-            self.sync_data(command)
+            self.subscribers[actual_host].send(pickle.dumps(command))
             print(f'New server Conected: {actual_host}')
             self.connection_thread[actual_host] = Thread(target=self.listen_local_node, name=actual_host, args=[actual_host, self.subscribers[actual_host]])
             self.connection_thread[actual_host].setDaemon(True)
@@ -74,12 +80,12 @@ class CacheNetwork():
 
     def listen_local_node(self, addr, conn):
         '''Method responsable for listen connection remote -> local'''
+        
         while 1:
             try:
                 data = []
                 while 1:
                     packet = conn.recv(FIXED_MSG_SIZE)
-                    retry = 0
                     data.append(packet)
                     if int(sys.getsizeof(packet)) < FIXED_MSG_SIZE:
                         break
@@ -91,17 +97,17 @@ class CacheNetwork():
                 print(f'Command Received from {addr}:\n{command}')
 
             except ConnectionResetError as err:
-                if retry == CON_RETRY:
-                    break
                 print(f"{addr} => Disconnected!")
-                retry += 1
-                time.sleep(5)
+                break
+
             except OSError as err:
                 print(err)
                 break
+        self.sync_data({})
 
     def connect_remote_node(self, host, port=5000):
         '''stay in contact with each existing node in network'''
+        RETRY = 0
         while 1:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -109,7 +115,7 @@ class CacheNetwork():
                 self.subscribers[host] = sock
                 print(f"Add by contacting +{host}")
                 while 1:
-                    retry = 0
+                    RETRY = 0
                     data = []
                     while 1:
                         packet = sock.recv(FIXED_MSG_SIZE)
@@ -124,20 +130,25 @@ class CacheNetwork():
                     print(f'Command Received from {host}:\n{command}')
 
             except ConnectionResetError as err:
-                if retry == CON_RETRY:
+                if host not in self.reconnect_list:
+                    self.reconnect_list.append(host)
+                if RETRY == CON_RETRY:
                     break
                 print(f"{host} => Disconnected!")
-                retry += 1
+                RETRY += 1
                 time.sleep(5)
             except ConnectionRefusedError as err:
-                if retry == CON_RETRY:
+                if host not in self.reconnect_list:
+                    self.reconnect_list.append(host)
+                if RETRY == CON_RETRY:
                     break
                 print(f"Trying reconnection to {host}!")
-                retry += 1
+                RETRY += 1
                 time.sleep(5)
             except OSError as err:
                 print(f'[ERROR] {err}')
                 break
+        self.sync_data({})
 
     def connect_to_network(self):
         '''method that creates all connection threads'''
@@ -162,9 +173,11 @@ class CacheNetwork():
                 print(f'{conn} EROR => {err}')
                 remove.append(conn)
             except Exception as err:
-                print(err)
+                print(f'{conn} EROR => {err}')
+                remove.append(conn)
         for conn in remove:
             del self.subscribers[conn]
+            self.network_nodes.remove(conn)
 
         del remove
 
@@ -179,16 +192,32 @@ class CacheNetwork():
         #SERVER->SERVER COMMUNICATION COMMANDS
 
         if command['type'] == 'updateNode':
-            for ipv4 in command['nodes']:
-                if ipv4 not in self.network_nodes and ipv4 != self.host:
-                    print(f"Adding by update + {ipv4}")
-                    self.network_nodes.append(ipv4)
+            if self.updated:
+                return
+            self.updated = True
+            if command['host'] is not self.host:
+                if command['host'] not in self.reconnect_list:
+                    self.local_cache = local_lru_cache.LRUCache(command['max_size'], command['expire_after'])
+                    for ipv4 in command['nodes']:
+                        if ipv4 not in self.network_nodes and ipv4 != self.host:
+                            print(f"Adding by update + {ipv4}")
+                            self.network_nodes.append(ipv4)
+                    if command['data'].keys():
+                        for key in list(command['data'].keys())[::-1]:
+                            self.local_cache.sync_key(command['data'][key])
 
-            for key in command['data'].keys()[::-1]:
-                self.local_cache.sync_key(command['data'][key])
-
-            self.local_cache = local_lru_cache.LRUCache(command['max_size'], command['expire_after'])
-            self.connect_to_network()
+                    self.connect_to_network()
+                else:
+                    new_command = {
+                    'type': 'updateNode',
+                    'nodes': self.network_nodes,
+                    'data': self.spy(),
+                    'host': self.host,
+                    'max_size': self.max_size,
+                    'expire_after': self.expire_after
+                    }
+                    self.subscribers[command['host']].send(pickle.dumps(new_command))
+                    self.reconnect_list.remove(command['host'])
 
         elif command['type'] == 'getHost':
             print(f"HOST ==>{self.host}")
@@ -214,9 +243,11 @@ class CacheNetwork():
 
     def get_key(self, key):
         '''method for client read from lru'''
+        result = self.local_cache.get_key(key)
         command = {'type':'syncGetKey', 'data':key}
-        self.sync_data(command)
-        return self.local_cache.get_key(key)
+        if result != -1:
+            self.sync_data(command)
+        return result
 
     # CONTROLER
 
