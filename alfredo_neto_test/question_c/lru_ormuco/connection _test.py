@@ -44,7 +44,10 @@ timer = time.time()
 fibonacci(10)
 print(time.time()-timer)
 print(n.spy())
+# n.set_key(1,2)
 # lista = [key for key in n.spy().keys()]
-# print(n.spy()['[head]'])
 print('-----------------------')
+# print(n.spy())
+import json
+print(json.dumps(n.spy(), indent=4, separators=("  ↓", " -> ")))
 # print(lista[::-1])

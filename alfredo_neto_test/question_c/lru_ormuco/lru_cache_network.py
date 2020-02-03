@@ -4,7 +4,7 @@ import pickle
 import time
 import sys
 from threading import Thread
-import local_lru_cache
+import lru_ormuco.local_lru_cache as local_lru_cache
 
 FIXED_MSG_SIZE = 1024
 CON_RETRY = 5
@@ -14,7 +14,7 @@ class CacheNetwork():
     '''Node of a big network infraestructure
         Public Methods:
             get_key(key) -> get key on cache
-            set_key(key,value) -> save key,value on cache
+            set_key(key,value) -> save/update (key,value) on cache
             spy() -> get entire cache without touching it
         Public Decorator
             cache_io -> cache I/O of a function/method
@@ -25,7 +25,10 @@ class CacheNetwork():
         self.subscribers = {}
         self.connection_thread = {}
         self.network_nodes = []
-        self.local_cache = local_lru_cache.LRUCache(max_size, expire_after)
+        self.max_size = max_size
+        self.expire_after = expire_after
+        if not join:
+            self.local_cache = local_lru_cache.LRUCache(max_size, expire_after)
         self.host = socket.gethostbyname(socket.gethostname())
         self.server = socket.create_server((self.host, self.port))
         if join:
@@ -57,7 +60,9 @@ class CacheNetwork():
                 'type': 'updateNode',
                 'nodes': self.network_nodes,
                 'data': self.spy(),
-                'host': self.host
+                'host': self.host,
+                'max_size': self.max_size,
+                'expire_after': self.expire_after
             }
 
             self.sync_data(command)
@@ -147,7 +152,7 @@ class CacheNetwork():
 
     def sync_data(self, data):
         '''Method to syncronize data across all nodes
-        :data: {'type: ?', 'data: [(key,value),...]'}
+        :data: {'type: ?', 'data: (key,value)'}
         '''
         remove = []
         for conn in self.subscribers:
@@ -182,6 +187,7 @@ class CacheNetwork():
             for key in command['data'].keys()[::-1]:
                 self.local_cache.sync_key(command['data'][key])
 
+            self.local_cache = local_lru_cache.LRUCache(command['max_size'], command['expire_after'])
             self.connect_to_network()
 
         elif command['type'] == 'getHost':
@@ -262,3 +268,4 @@ if __name__ == "__main__":
             NODE.stop()
             print("Exiting Network")
             break
+    sys.exit()
